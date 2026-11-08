@@ -810,7 +810,7 @@ function badge(nm,cnt,gold){
    全局状态 & 路由
    ============================================================ */
 const FAST=new URLSearchParams(location.search).has("fast");
-const BUILD="b1109-1";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
+const BUILD="b1109-2";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
 const G={
   screen:"title",
   seqIdx:0,
@@ -1643,12 +1643,18 @@ function noChampStory(){
     `终场哨响，${name}把球轻轻放在地板中央，向四周挥手致意。他的生涯清单上什么都写了，唯独没有"总冠军"三个字。可看过他打球的人都知道：这本身，就是一段传奇。`
   ]);
 }
-function bracketHTML(b){
+function bracketHTML(b,userTeam){
   if(!b)return"";
+  const mark=(x)=>{
+    if(!x.user)return"";
+    const uIsA=(x.a===userTeam);
+    const won=uIsA?(x.aw>x.bw):(x.bw>x.aw);
+    return won?" ✅":" ❌";
+  };
   return `<div style="margin-top:6px;border:1px solid var(--line2);border-radius:3px;padding:6px 9px;background:#fbf6e8">
     <div style="font-size:11.5px;color:var(--ink2);margin-bottom:3px">${esc(b.conf)}部季后赛 · 你是 ${b.userSeed} 号种子</div>
     ${b.rounds.map(r=>`<div style="margin:4px 0"><b style="font-size:12.5px">${esc(r.name)}</b>
-      ${r.series.map(x=>`<div style="font-size:12.5px;padding:1px 0;${x.user?"font-weight:700;color:var(--rust)":"color:var(--ink2)"}">${esc(x.a)} ${x.aw} - ${x.bw} ${esc(x.b)}${x.user?(x.aw>x.bw?" ✅":" ❌"):""}</div>`).join("")}
+      ${r.series.map(x=>`<div style="font-size:12.5px;padding:1px 0;${x.user?"font-weight:700;color:var(--rust)":"color:var(--ink2)"}">${esc(x.a)} ${x.aw} - ${x.bw} ${esc(x.b)}${mark(x)}</div>`).join("")}
     </div>`).join("")}
   </div>`;
 }
@@ -1675,7 +1681,7 @@ function showSeasonResult(rec){
         ${rec.mvpLine?esc(rec.mvpLine)+"<br>":""}
         总评 <b>${rec.ov}</b> ${rec.ovChange?`（${rec.ovChange>0?"+":""}${rec.ovChange}）`:""}
       </div>
-      ${rec.bracket?bracketHTML(rec.bracket):""}
+      ${rec.bracket?bracketHTML(rec.bracket,rec.team):""}
       ${poStoryBlk}`}
     ${awards?`<div class="px-hr"></div><div>${awards}</div>`:""}
     ${story}
