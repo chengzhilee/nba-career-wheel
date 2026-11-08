@@ -3,3 +3,5 @@
 .zcode/
 _check.js
 *.log
+_remote_index.html
+auth-then-push.sh

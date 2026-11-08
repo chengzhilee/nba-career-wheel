@@ -810,7 +810,7 @@ function badge(nm,cnt,gold){
    全局状态 & 路由
    ============================================================ */
 const FAST=new URLSearchParams(location.search).has("fast");
-const BUILD="b1108-5";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
+const BUILD="b1108-6";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
 const G={
   screen:"title",
   seqIdx:0,
@@ -825,7 +825,7 @@ const G={
   nba:null,         // NBA 进度
 };
 function saveGame(){try{localStorage.setItem("nbaWheelSave_v1",JSON.stringify({v:1,G:{seqIdx:G.seqIdx,wheels:G.wheels,look:G.look,body:G.body,styleText:G.styleText,player:G.player,college:G.college,ncaa:G.ncaa,draft:G.draft,nba:G.nba},screen:G.screen}));}catch(e){}}
-function loadGame(){try{const d=JSON.parse(localStorage.getItem("nbaWheelSave_v1")||"null");if(!d||!d.G)return null;Object.assign(G,d.G);G.screen=d.screen||"title";if(!G.look)G.look={skin:randi(0,4),hairC:randi(0,5),hairStyle:randi(0,4)};if(G.nba&&!G.nba.ach)G.nba.ach={};return d;}catch(e){return null;}}
+function loadGame(){try{const d=JSON.parse(localStorage.getItem("nbaWheelSave_v1")||"null");if(!d||!d.G)return null;Object.assign(G,d.G);G.screen=d.screen||"title";if(!G.look)G.look={skin:randi(0,4),hairC:randi(0,5),hairStyle:randi(0,4)};if(G.nba&&!G.nba.ach)G.nba.ach={};if(G.wheels&&typeof G.wheels.career!=="number")G.wheels.career=parseInt(G.wheels.career)||20;if(G.nba&&typeof G.nba.careerLen!=="number")G.nba.careerLen=Number(G.wheels.career)||20;return d;}catch(e){return null;}}
 function hasSave(){return !!localStorage.getItem("nbaWheelSave_v1");}
 function newGame(){
   G.seqIdx=0;G.wheels={};G.body=null;G.styleText="";G.player=null;G.college=null;G.ncaa=null;G.draft=null;G.nba=null;
@@ -1847,6 +1847,8 @@ function teamStrOf(nba,team){ensureLeague(nba);return nba.teamStr?clamp(nba.team
 
 function simNBASeason(){
   const nba=G.nba,p=G.player,n=G.ncaa,b=G.body;
+  // 硬门槛：达到退役条件后不再生成新赛季（防异常存档无限续命）
+  if(nba.stats.length&&shouldRetire()){const lastRec=nba.stats[nba.stats.length-1];return lastRec;}
   const si=nba.stats.length;   // 以已完赛数为准，避免标签重复
   const year=nba.year+si;
   const age=n.age+si;
@@ -1917,6 +1919,8 @@ function simNBASeason(){
   }
   // 模拟一个完整分区：8 种子三轮 → 冠军；用户种子用 winP，其余按种子强度
   function simConfBracket(seedList,seedNames,userSeed,winP){
+    window.__diag=window.__diag||[];
+    seedList.forEach(sd=>{ if(!(sd in seedNames))window.__diag.push({missingSeed:sd,keys:Object.keys(seedNames)}); });
     const rounds=[];
     let alive=seedList.slice();
     const userParts=[];
@@ -1931,10 +1935,11 @@ function simNBASeason(){
           const aIsUser=(a===userSeed);
           const pA=clamp(winP-round*0.04,0.25,0.82);
           const s=simSeriesGames(pA);
-          aw=aIsUser?s.w:s.l; bw=aIsUser?s.l:s.w;
-          userWon=aw>bw;
-          userParts.push({round,opp:aIsUser?seedNames[b]:seedNames[a],w:aIsUser?aw:bw,l:aIsUser?bw:aw,games:s.games,userSeed,oppSeed:aIsUser?b:a,lost:!userWon});
-          if(userWon)next.push(aIsUser?a:b);
+          const uw=s.w, ul=s.l;   // 用户视角：胜/负
+          aw=aIsUser?uw:ul; bw=aIsUser?ul:uw;
+          userWon=uw>ul;
+          userParts.push({round,opp:aIsUser?seedNames[b]:seedNames[a],w:uw,l:ul,games:s.games,userSeed,oppSeed:aIsUser?b:a,lost:!userWon});
+          if(userWon)next.push(aIsUser?a:b); else next.push(aIsUser?b:a);
         }else{
           const hi=Math.min(a,b),lo=Math.max(a,b);
           const pHi=clamp(0.5+(lo-hi)*0.05,0.35,0.68);
@@ -1953,6 +1958,8 @@ function simNBASeason(){
   if(rank<=8){
     const clutchB=(G.wheels.trait===2?TRAITS[2].clutch:0)+(tags.includes("clutch")?0.05:0);
     const winP=clamp(0.61-rank*0.012+(ov0-78)*0.005+clutchB+(teamStr-0.5)*0.25,0.3,0.74);
+    const clutchBoost=1.03+(G.wheels.trait===2?0.08:0)+(tags.includes("clutch")?0.04:0);
+    const poPpg=clamp(pts*clutchBoost+gauss(0,1.5),5,45);
     // 我方分区：8 种子（用户为 rank 号种子）
     const others=shuffle(NBA_TEAMS.filter(t=>t.n!==nba.team&&t.conf===nba.conf).map(t=>t.n)).slice(0,7);
     const mySeeds=[1,8,4,5,2,7,3,6];
@@ -1977,7 +1984,9 @@ function simNBASeason(){
       myBracket.rounds.push({name:"总决赛",series:[finalsRec]});
       if(userWon){
         champ=true;
-        if(pts>=20||ov0>=85||chance(.35))fmvp=true;
+        // FMVP 按季后赛表现：9 分的角色球员不该拿 FMVP
+        const fmvPChance=clamp(0.06+(poPpg-10)*0.05+(ov0-80)*0.015+(G.wheels.trait===2?0.08:0),0.04,0.55);
+        if(chance(fmvPChance))fmvp=true;
       }
     } else {
       // 用户未进总决赛：两分区冠军对决
@@ -2013,8 +2022,7 @@ function simNBASeason(){
     playoffText="季后赛："+seriesLines.join("，")+(champ?"，夺得总冠军！":"");
     // 季后赛场均
     if(allUserParts.length){
-      const clutchBoost=1.03+(G.wheels.trait===2?0.08:0)+(tags.includes("clutch")?0.04:0);
-      playoffPpg=clamp(pts*clutchBoost+gauss(0,1.5),5,45);
+      playoffPpg=poPpg;
     }
     // 抢七绝杀叙事
     const g7win=allUserParts.find(u=>u.games&&u.games.length===7&&!u.lost);
