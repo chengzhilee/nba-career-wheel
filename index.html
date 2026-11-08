@@ -537,7 +537,7 @@ const ACHIEVEMENTS=[
 ];
 
 /* 文案 */
-const ANNOUNCE="天赋影响加点费用；身体与打法决定各项固定上限，训练和休赛期均不变。NCAA 与 NBA 都可成长；初始总评不超过 77。";
+const ANNOUNCE="天赋影响加点费用；身体与打法决定各项固定上限。27 岁前上限随身体发育缓慢成长；天赋出众者可花费训练点突破极限。NCAA 与 NBA 都可成长；初始总评不超过 77。";
 const BODY_NOTE="修改身高时，臂展会限制在合理范围内。转盘各数值等概率，身材特点会影响打法。";
 
 /* 打法描述关键词 → 属性加成 */
@@ -810,7 +810,7 @@ function badge(nm,cnt,gold){
    全局状态 & 路由
    ============================================================ */
 const FAST=new URLSearchParams(location.search).has("fast");
-const BUILD="b1108-6";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
+const BUILD="b1109-1";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
 const G={
   screen:"title",
   seqIdx:0,
@@ -825,7 +825,9 @@ const G={
   nba:null,         // NBA 进度
 };
 function saveGame(){try{localStorage.setItem("nbaWheelSave_v1",JSON.stringify({v:1,G:{seqIdx:G.seqIdx,wheels:G.wheels,look:G.look,body:G.body,styleText:G.styleText,player:G.player,college:G.college,ncaa:G.ncaa,draft:G.draft,nba:G.nba},screen:G.screen}));}catch(e){}}
-function loadGame(){try{const d=JSON.parse(localStorage.getItem("nbaWheelSave_v1")||"null");if(!d||!d.G)return null;Object.assign(G,d.G);G.screen=d.screen||"title";if(!G.look)G.look={skin:randi(0,4),hairC:randi(0,5),hairStyle:randi(0,4)};if(G.nba&&!G.nba.ach)G.nba.ach={};if(G.wheels&&typeof G.wheels.career!=="number")G.wheels.career=parseInt(G.wheels.career)||20;if(G.nba&&typeof G.nba.careerLen!=="number")G.nba.careerLen=Number(G.wheels.career)||20;return d;}catch(e){return null;}}
+function loadGame(){try{const d=JSON.parse(localStorage.getItem("nbaWheelSave_v1")||"null");if(!d||!d.G)return null;Object.assign(G,d.G);G.screen=d.screen||"title";if(!G.look)G.look={skin:randi(0,4),hairC:randi(0,5),hairStyle:randi(0,4)};if(G.nba&&!G.nba.ach)G.nba.ach={};if(G.wheels&&typeof G.wheels.career!=="number")G.wheels.career=parseInt(G.wheels.career)||20;if(G.nba&&typeof G.nba.careerLen!=="number")G.nba.careerLen=Number(G.wheels.career)||20;
+if(G.player&&G.player.attrs&&G.player.caps){ATTRS.forEach(a=>{if(G.player.caps[a.k]<G.player.attrs[a.k])G.player.caps[a.k]=G.player.attrs[a.k];});}
+return d;}catch(e){return null;}}
 function hasSave(){return !!localStorage.getItem("nbaWheelSave_v1");}
 function newGame(){
   G.seqIdx=0;G.wheels={};G.body=null;G.styleText="";G.player=null;G.college=null;G.ncaa=null;G.draft=null;G.nba=null;
@@ -2180,9 +2182,13 @@ function offseason(){
   }else if(age<=24&&chance(.6)){
     // 年轻球员自然成长
     const k=pick(["layup","mid","three","pass","rebound"]);
-    p.attrs[k]=clamp(p.attrs[k]+1,30,p.caps[k]);
+    p.attrs[k]=clamp(p.attrs[k]+1,30,Math.min(99,p.caps[k]+1));
     const k2=pick(["layup","mid","three","pass","rebound","handle"]);
-    p.attrs[k2]=clamp(p.attrs[k2]+1,30,p.caps[k2]);
+    p.attrs[k2]=clamp(p.attrs[k2]+1,30,Math.min(99,p.caps[k2]+1));
+  }
+  // 身体发育：27 岁前每年休赛期全属性上限 +1（训练永远有空间）
+  if(age<=27){
+    ATTRS.forEach(a=>{p.caps[a.k]=clamp((p.caps[a.k]||50)+1,30,99);});
   }
   nba.season++;
   // 合同与流动
@@ -2572,6 +2578,39 @@ function totalsRow(){
     ${[["出战",t.gp],["总得分",t.pts],["总篮板",t.reb],["总助攻",t.ast],["总抢断",t.stl],["总盖帽",t.blk]].map(([k,v])=>`<div><div style="font-weight:700;font-size:17px">${fmt0(v)}</div><div class="px-sub">${k}</div></div>`).join("")}
   </div></div>`;
 }
+/* 突破极限训练：花费大量训练点冲击上限，成功率看天赋/年龄，越突破越贵 */
+function breakthroughCost(){return 30+((G.player._breakthroughs||0)*10);}
+function openBreakthroughModal(){
+  const p=G.player,cost=breakthroughCost();
+  const successRate=clamp(0.35+(G.wheels.talent-80)*0.02-(G.ncaa.age+G.nba.season-24)*0.02+(G.wheels.trait===4?0.15:0)-(p._breakthroughs||0)*0.08,0.1,0.85);
+  const m=openModal(`<h3>💥 突破极限训练</h3>
+    <div style="font-size:13px;line-height:2;margin-bottom:10px">消耗 <b>${cost} 训练点</b>冲击一项属性的上限（+2~3）。<br>
+    成功率 <b>${Math.round(successRate*100)}%</b>（天赋 ${G.wheels.talent} · 年龄 ${G.ncaa.age+G.nba.season} 岁${(p._breakthroughs||0)?` · 已突破 ${p._breakthroughs} 次（愈发困难）`:""}）。<br>
+    失败会耗尽训练点——身体，是有极限的。</div>
+    ${ATTRS.map(a=>`<button class="px-btn big bkopt" data-k="${a.k}" style="margin-bottom:6px;justify-content:space-between">
+      <span>${a.n}</span><span class="px-sub">上限 ${fmt1(p.caps[a.k])} → ${fmt1(p.caps[a.k]+2)}~${fmt1(p.caps[a.k]+3)}</span>
+    </button>`).join("")}
+    <button class="px-btn big" id="bkCancel" style="margin-top:4px">取消</button>`);
+  m.box.querySelector("#bkCancel").onclick=()=>m.close();
+  m.box.querySelectorAll(".bkopt").forEach(btn=>btn.onclick=()=>{
+    const k=btn.getAttribute("data-k");
+    if((p.trainPts||0)<cost)return toast(`训练点不足（需要 ${cost} 点）`);
+    p.trainPts-=cost;
+    p._breakthroughs=(p._breakthroughs||0)+1;
+    if(chance(successRate)){
+      const gain=randi(2,3);
+      p.caps[k]=clamp(p.caps[k]+gain,30,99);
+      p.attrs[k]=clamp(p.attrs[k]+1,30,p.caps[k]);
+      G.nba.album.push(`💥 突破极限：${ATTRN[k]}上限提升至 ${fmt1(p.caps[k])}！`);
+      G.nba.news.unshift(`💥 突破人类极限！${G.body.name} 的${ATTRN[k]}被练到了 ${fmt1(p.caps[k])}。`);
+      sfx.win();toast(`💥 突破成功！${ATTRN[k]}上限 +${gain}`);
+    }else{
+      G.nba.news.unshift(`😤 突破失败：${G.body.name} 在加练中倒下了——身体，是有极限的。`);
+      sfx.bad();toast("😤 突破失败，训练点已耗尽");
+    }
+    saveGame();m.close();renderNBA();
+  });
+}
 /* 训练页 */
 function renderTrainTab(){
   const p=G.player;
@@ -2599,6 +2638,7 @@ function renderTrainTab(){
         固定上限不可突破：身体与打法决定上限。每年休赛期自动获得训练点。
       </div>
       <div class="attr-grid">${ATTRS.map(cell).join("")}</div>
+      <button class="px-btn primary big" id="btnBreakthrough" style="margin-top:12px;width:100%">💥 突破极限训练（${30+((p._breakthroughs||0)*10)} 训练点 · 上限 +2~3）</button>
       <details style="margin-top:12px">
         <summary class="px-title" style="cursor:pointer">📊 属性雷达（当前 vs 巅峰上限）</summary>
         <canvas id="radarChart" style="width:100%;height:230px;margin-top:8px"></canvas>
@@ -2701,6 +2741,7 @@ function bindTrainTab(){
     toast(`训练 +${used} 点属性，消耗 ${used*cost} 训练点`);
   };
   const bp=$("#btnChangePos");if(bp)bp.onclick=()=>{sfx.click();openPositionModal();};
+  const bb=$("#btnBreakthrough");if(bb)bb.onclick=()=>{sfx.click();openBreakthroughModal();};
 }
 /* 排行页 */
 function renderRankTab(){
