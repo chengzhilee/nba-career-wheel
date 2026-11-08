@@ -2001,9 +2001,9 @@ function simNBASeason(){
       const pA=clamp(winP-0.12,0.25,0.8);
       const s=simSeriesGames(pA);
       const userWon=s.w>s.l;
-      finalsRec={a:confChamp,b:otherChamp,aw:userWon?s.w:s.l,bw:userWon?s.l:s.w,user:true,userWon};
+      finalsRec={a:confChamp,b:otherChamp,aw:s.w,bw:s.l,user:true,userWon};
       myBracket.rounds.push({name:"总决赛",series:[finalsRec]});
-      if(userWon){
+      if(finalsRec.userWon){
         champ=true;
         // FMVP 按季后赛表现：9 分的角色球员不该拿 FMVP
         const fmvPChance=clamp(0.03+(poPpg-24)*0.09+(ov0-82)*0.02+(G.wheels.trait===2?0.06:0),0.02,0.7);
@@ -2019,13 +2019,13 @@ function simNBASeason(){
     leagueChamp=finalsRec.aw>finalsRec.bw?finalsRec.a:finalsRec.b;
     // 用户系列赛汇总 → 叙事
     const allUserParts=[...myBracket.userParts];
-    if(userInFinals)allUserParts.push({round:3,opp:otherChamp,w:finalsRec.aw,l:finalsRec.bw,games:null,userSeed:rank,oppSeed:9,lost:!champ,finalsOnly:true});
+    if(userInFinals)allUserParts.push({round:3,opp:otherChamp,w:finalsRec.aw,l:finalsRec.bw,games:null,userSeed:rank,oppSeed:9,lost:!finalsRec.userWon,finalsOnly:true});
     const seriesLines=[];
     const roundNames=["首轮","分区半决赛","分区决赛","总决赛"];
     allUserParts.forEach(u=>{
       const nm=roundNames[u.round];
       if(u.finalsOnly){
-        if(champ)seriesLines.push(`总决赛 ${finalsRec.aw}-${finalsRec.bw} 击败${u.opp}`);
+        if(finalsRec.userWon)seriesLines.push(`总决赛 ${finalsRec.aw}-${finalsRec.bw} 击败${u.opp}`);
         else seriesLines.push(`总决赛 ${finalsRec.aw}-${finalsRec.bw} 止步（负于${u.opp}）`);
         return;
       }
@@ -2154,7 +2154,7 @@ function simNBASeason(){
   });
   if(H.as===1)nba.album.push(`${rec.label}：首次入选全明星！`);
   if(awards.some(a=>a.name===HONOR_N.mvp))nba.album.push(`${rec.label}：当选常规赛 MVP！！`);
-  if(champ)nba.album.push(`${rec.label}：随${rec.team}夺得 NBA 总冠军${fmvp?"，荣膺 FMVP":""}！`);
+  if(rec.champ)nba.album.push(`${rec.label}：随${rec.team}夺得 NBA 总冠军${rec.fmvp?"，荣膺 FMVP":""}！`);
   // 总评变化（赛季中不打训练，休赛期统一处理）
   nba.peakOv=Math.max(nba.peakOv,Math.round(ov0));
   nba._tot=tot;
