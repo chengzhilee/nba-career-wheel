@@ -810,7 +810,7 @@ function badge(nm,cnt,gold){
    全局状态 & 路由
    ============================================================ */
 const FAST=new URLSearchParams(location.search).has("fast");
-const BUILD="b1109-2";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
+const BUILD="b1109-3";   // 版本号：标题页右下角可见，用于确认是否加载了最新代码
 const G={
   screen:"title",
   seqIdx:0,
@@ -1599,7 +1599,8 @@ function champStory(rec){
   const year=Number(rec.label.slice(0,4))+1;
   const waited=lt?Math.max(1,year-lt):999;
   const fmvp=rec.fmvp,age=rec.age||0;
-  const fmvpTail=fmvp?pick([`，FMVP 奖杯上刻下的正是他的名字`,`，他毫无悬念地加冕 FMVP`,`，FMVP 选票几乎清一色写着他`]):"";
+  const po=rec.playoffPpg||0;
+  const fmvpTail=fmvp?(po>=28?pick([`，FMVP 奖杯上刻下的正是他的名字`,`，他毫无悬念地加冕 FMVP——选票几乎清一色写着他`,`，FMVP？投票的结果毫无悬念`]):pick([`，力压全队众星，他捧起了 FMVP 奖杯`,`，FMVP 评选中他以微弱优势胜出——这场系列赛属于他`])):"";
   const vetTail=(age>=33)?pick([`${age} 岁的老将，用最后的巅峰兑现了所有等待。`,""]):"";
   let core;
   if(prevWithTeam===0&&lt===0){
@@ -1993,7 +1994,7 @@ function simNBASeason(){
       if(userWon){
         champ=true;
         // FMVP 按季后赛表现：9 分的角色球员不该拿 FMVP
-        const fmvPChance=clamp(0.06+(poPpg-10)*0.05+(ov0-80)*0.015+(G.wheels.trait===2?0.08:0),0.04,0.55);
+        const fmvPChance=clamp(0.03+(poPpg-24)*0.09+(ov0-82)*0.02+(G.wheels.trait===2?0.06:0),0.02,0.7);
         if(chance(fmvPChance))fmvp=true;
       }
     } else {
