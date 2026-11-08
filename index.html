@@ -454,7 +454,7 @@ const STARS=[
 function segs(arr){return arr.map(v=>({v,d:String(v)}));}
 const WHEELS=[
   {id:"height",title:"身高 (cm)",pal:DARK,segs:segs([172,175,178,180,183,186,189,192,195,198,201,204,207,210,213,216,219,222,224,226])},
-  {id:"weight",title:"体重 (kg)",pal:BRIGHT,segs:segs([50,55,58,60,62,65,67,70,74,76,79,84,87,90,93,97,101,104,109,120,132,141,160,200])},
+  {id:"weight",title:"体重 (kg)",pal:BRIGHT,dynamic:"weight",segs:segs([50,55,58,60,62,65,67,70,74,76,79,84,87,90,93,97,101,104,109,120,132,141,160,200])},
   {id:"wing",title:"臂长 (cm · 基于身高加减)",pal:BRIGHT,segs:segs([15,12,10,9,6,4,2,0,-2,-4,-6,-8]).map(s=>({...s,d:(s.v>0?"+":"")+s.v}))},
   {id:"talent",title:"天赋值",pal:BRIGHT,segs:segs([79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,95,96,98,99,100])},
   {id:"pos",title:"位置 (最有节目效果的一集)",pal:DARK,segs:["控球后卫","中锋","小前锋","得分后卫","大前锋","控球后卫","中锋","小前锋","得分后卫","大前锋"].map(v=>({v,d:v}))},
@@ -468,6 +468,33 @@ const WHEELS=[
   {id:"career",title:"职业生涯",pal:MULTI,segs:segs([17,19,21,12,16,"20+",10,14,13,18])},
 ];
 const WHEEL_BY_ID={};WHEELS.forEach(w=>WHEEL_BY_ID[w.id]=w);
+
+/* 体重转盘：根据身高动态生成 24 格（BMI 正态分布，钳制在合理区间） */
+const WEIGHT_SEGS_DEFAULT=segs([50,55,58,60,62,65,67,70,74,76,79,84,87,90,93,97,101,104,109,120,132,141,160,200]);
+function weightSegsFor(h){
+  if(!h||h<140)return WEIGHT_SEGS_DEFAULT.slice();
+  const hM=h/100,pts=[];
+  for(let i=0;i<240;i++){
+    let bmi=23.5+gauss(0,2.0);
+    bmi=clamp(bmi,18.5,30.5);
+    pts.push(bmi*hM*hM);
+  }
+  pts.sort((a,b)=>a-b);
+  const segVals=[];let last=-1;
+  for(let i=0;i<pts.length&&segVals.length<24;i++){
+    const v=Math.round(pts[Math.floor((i+0.5)/pts.length*pts.length)]);
+    if(v!==last&&v>=40){segVals.push(v);last=v;}
+  }
+  while(segVals.length<24){const v=segVals[segVals.length-1]+1;segVals.push(v);}
+  return segs(segVals);
+}
+/* 身高已知时刷新体重转盘格子；返回是否生效 */
+function refreshWeightWheel(){
+  const h=G.wheels.height||G.body?.height;
+  if(!h)return false;
+  WHEEL_BY_ID.weight.segs=weightSegsFor(h);
+  return true;
+}
 
 /* 大学（含基础实力 0~1） */
 const COLLEGES=[
@@ -910,7 +937,12 @@ function renderTitle(){
    ============================================================ */
 function renderWheelSeq(){
   const i=clamp(G.seqIdx,0,WHEELS.length-1);
-  const wheel=WHEELS[i];
+  let wheel=WHEELS[i];
+  let chipExtra="";
+  if(wheel.id==="weight"&&G.wheels.height){
+    refreshWeightWheel();
+    chipExtra=` · 适配身高 ${G.wheels.height}cm`;
+  }
   app.innerHTML=`
   <div class="screen scr-wheel" id="wheelSeqRoot" style="position:relative">
     <button class="mute-btn" onclick="toggleMute()">${muted?"🔇":"🔊"}</button>
@@ -922,7 +954,7 @@ function renderWheelSeq(){
   const holder=$("#wheelHolder");
   const ctrl=createWheelCtrl(holder,wheel,{fast:FAST});
   ctrl.mount(
-    `<div class="w-chip">${wheel.icon?esc(wheel.icon)+" ":""}${esc(wheel.title)}</div><div class="w-result"><span style="font-size:20px;color:#a7adba;font-family:var(--uifont)">点击下方按钮开始</span></div>`,
+    `<div class="w-chip">${wheel.icon?esc(wheel.icon)+" ":""}${esc(wheel.title)}${chipExtra?`<span style="font-size:14px;color:#8a90a0">${esc(chipExtra)}</span>`:""}</div><div class="w-result"><span style="font-size:20px;color:#a7adba;font-family:var(--uifont)">点击下方按钮开始</span></div>`,
     `<button class="btn primary spin">转 动</button><button class="btn ghost hidden next">确 认 · 下一项</button>`
   );
   holder.querySelector(".w-progress").textContent=`第 ${i+1} / ${WHEELS.length} 项`;
@@ -951,6 +983,7 @@ function renderWheelSeq(){
 function quickDrawAll(){
   sfx.click();
   WHEELS.forEach(w=>{
+    if(w.id==="weight"&&G.wheels.height)refreshWeightWheel();
     const seg=pick(w.segs);
     G.wheels[w.id]=seg.v;
     if(w.id==="career"&&seg.v==="20+")G.wheels.career=randi(20,23);
@@ -1111,7 +1144,11 @@ function renderBody(){
     updRange();
   };
   $("#btnWH").onclick=()=>openWheelOverlay("height",v=>{G.wheels.height=v;$("#inpH").value=v;$("#inpH").dispatchEvent(new Event("input"));sfx.coin();});
-  $("#btnWW").onclick=()=>openWheelOverlay("weight",v=>{G.wheels.weight=v;$("#inpW").value=v;sfx.coin();});
+  $("#btnWW").onclick=()=>{
+    G.wheels.height=clamp(parseInt($("#inpH").value)||G.body.height,160,240);
+    refreshWeightWheel();
+    openWheelOverlay("weight",v=>{G.wheels.weight=v;$("#inpW").value=v;sfx.coin();});
+  };
   $("#btnWWing").onclick=()=>openWheelOverlay("wing",v=>{
     const h=clamp(parseInt($("#inpH").value)||211,160,240);
     const [lo,hi]=wingRange(h);
