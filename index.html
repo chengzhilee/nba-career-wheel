@@ -1870,13 +1870,18 @@ function simLeague(nba){
   }
   L.used=Array.from(used);
   L.stars.forEach(s=>{
-    s.wins=randi(18,63);s.gp=randi(55,82);
+    // 球队战绩与球星质量挂钩：MVP 候选应出自 45+ 胜的强队
+    s.wins=clamp(Math.round(16+(s.ov-64)*0.8+gauss(0,5)),14,66);s.gp=randi(55,82);
     // 数据标定：ov70→12分/ov80→20分/ov88→27分/ov96→33分；其余类推
     s.ppg=clamp(12+(s.ov-70)*0.73+gauss(0,2.2),4,35.5);
     s.rpg=clamp(2+(s.ov-62)*0.24*POSITIONS[s.pos].reb+gauss(0,1),0.8,16);
     s.apg=clamp(1+(s.ov-62)*0.16*POSITIONS[s.pos].ast+gauss(0,0.8),0.4,12.5);
     s.spg=clamp(0.5+(s.ov-62)*0.045*POSITIONS[s.pos].stl+gauss(0,0.25),0.3,2.9);
     s.bpg=clamp(0.4+(s.ov-62)*0.055*POSITIONS[s.pos].blk+gauss(0,0.25),0.1,4);
+  });
+  // 联盟门面：评分前 4 的球星所在球队必然是 45+ 胜的争冠强队
+  [...L.stars].sort((a,b)=>b.ov-a.ov).slice(0,4).forEach(s=>{
+    s.wins=Math.max(s.wins,randi(45,60));
   });
   // 得分担当：每年 2~3 名顶级外线以得分为第一要务，制造真实的得分王竞争
   const scorers=L.stars.filter(s=>["得分后卫","小前锋","控球后卫"].includes(s.pos)).sort((a,b)=>b.ov-a.ov).slice(0,3);
